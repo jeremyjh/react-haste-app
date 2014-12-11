@@ -13,12 +13,9 @@ import Control.Applicative
 import Control.Monad
 import Prelude hiding (div)
 
-import Haste hiding (onEvent)
 import Haste.Foreign
-import Haste.JSON
 import Haste.Prim
 import Lens.Family2
-import Lens.Family2.Stock
 import React
 
 import System.IO.Unsafe
@@ -31,18 +28,7 @@ data PageState = PageState
     , _typingValue :: JSString
     }
 
-initialPageState :: PageState
-initialPageState = PageState
-    [Todo "abc" Active, Todo "xyz" Completed,
-     Todo "sjdfk" Active, Todo "ksljl" Completed]
-    ""
-
 -- UTILITY
-
--- we have to define these lenses manually since template haskell isn't yet
--- supported in haste
-text :: Lens' Todo JSString
-text f (Todo t s) = (`Todo` s) <$> f t
 
 status :: Lens' Todo Status
 status f (Todo t s) = Todo t <$> f s
@@ -71,8 +57,9 @@ ix' k f xs0 | k < 0     = pure xs0
 
 -- remove an item from the list by index
 iFilter :: Int -> [a] -> [a]
-iFilter 0 (a:as) = as
+iFilter 0 (_:as) = as
 iFilter n (a:as) = a : iFilter (n-1) as
+iFilter _ [] = error "can't remove from empty list"
 
 -- CONTROLLER
 
@@ -214,19 +201,17 @@ wholePage = div_ $ do
 
 clientMain :: API -> Client ()
 clientMain api = do
-  todos <- onServer $ apiFetchTodos api
-  liftIO $ do
-    Just elem <- elemById "inject"
-    render (PageState todos "") elem wholePage
-  withElems ["new-todo"] $ \[todo] ->
-      todo `onEvent` OnKeyDown $ \k ->
-        case k of
-          13 -> do
-            m <- getProp todo "value"
-            todos' <- onServer $ apiAddTodo api <.> Todo (toJSString m) Active
-            liftIO $ do
-              Just elem <- elemById "inject"
-              render (PageState todos' "") elem wholePage
-          _ ->
-            return ()
-  return ()
+    initTodos <- onServer $ apiFetchTodos api
+    inject <- liftIO $ do
+        Just inject <- elemById "inject"
+        render (PageState initTodos "") inject wholePage
+        return inject
+    withElems ["new-todo"] $ \[todo] ->
+        todo `onEvent` OnKeyDown $ \k ->
+          case k of
+              13 -> do
+                  m <- getProp todo "value"
+                  todos' <- onServer $ apiAddTodo api <.> Todo (toJSString m) Active
+                  liftIO $
+                    render (PageState todos' "") inject wholePage
+              _ -> return ()

@@ -22,13 +22,14 @@ flag haste-inst
 executable todomvc
   main-is:             Main.hs
   other-modules:       Client, Types
-  build-depends:       base, react-haskell, lens-family, acid-state, safecopy
+  build-depends:       base, react-haskell, lens-family, acid-state, safecopy, mtl
   if flag(haste-inst)
     build-depends:
       haste-lib >= 0.4 && <0.5
+    ghc-options:   --with-js=lib/stubs.js
   else
     build-depends:
       haste-compiler
+    ghc-options:   -Wall
   hs-source-dirs:      src
   default-language:    Haskell2010
-  ghc-options:          --with-js=lib/stubs.js

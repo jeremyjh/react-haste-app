@@ -1,19 +1,21 @@
 {-# LANGUAGE TemplateHaskell, TypeFamilies, FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Server (initAPI) where
 
-import Haste.App hiding (get)
+import Haste.App (App, Server, remote, liftServerIO, JSString)
 import Types
 
-import Control.Applicative
+import Control.Applicative ((<*>), (<$>))
 
 import Control.Monad.Reader(ask)
 import qualified Control.Monad.State as State
 
-import Data.Acid
-import Data.Acid.Advanced
-import Data.SafeCopy
+import Data.Acid (Query, Update, makeAcidic, AcidState, openLocalStateFrom)
+import Data.Acid.Advanced (update', query')
+import Data.SafeCopy (deriveSafeCopy, base)
 
 type State = [Todo]
 
@@ -48,10 +50,9 @@ initAPI =
  do state <- liftServerIO $ openLocalStateFrom "db" initialTodos
     API <$> remote (fetchTodos state)
         <*> remote (insertTodo state)
-
-initialTodos =
-    [Todo "derp" Active, Todo "xyz" Completed,
-     Todo "sjdfk" Active, Todo "ksljl" Completed]
+  where initialTodos =
+            [Todo "derp" Active, Todo "xyz" Completed
+            ,Todo "sjdfk" Active, Todo "ksljl" Completed]
 
 deriveSafeCopy 1 'base ''JSString
 deriveSafeCopy 1 'base ''Status

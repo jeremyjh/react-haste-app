@@ -8,7 +8,7 @@ build/web/todomvc.js: src/*.hs
 	hastec --debug -isrc --with-js=lib/stubs.js src/Main.hs -o $@
 
 build/todomvc: src/*.hs
-	ghc --make -isrc src/Main.hs -o build/todomvc
+	ghc --make -Wall -isrc src/Main.hs -o build/todomvc
 
 build/web/:
 	mkdir -p $@

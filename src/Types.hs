@@ -1,14 +1,16 @@
 {-# LANGUAGE FlexibleInstances, DeriveGeneric, DeriveDataTypeable #-}
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Types where
 
-import Haste.App
-import Haste.Prim
+import Haste.App (JSString, Binary(..), Remote, Server)
+import Haste.Prim (toJSStr, fromJSStr)
 
-import Control.Applicative
+import Control.Applicative ((<$>))
 
-import GHC.Generics
-import Data.Typeable
+import GHC.Generics (Generic)
+import Data.Typeable (Typeable)
 
 
 data Status = Active | Completed
