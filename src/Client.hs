@@ -26,14 +26,6 @@ import System.IO.Unsafe
 import Debug.Trace
 -- MODEL
 
-data Status = Active | Completed
-    deriving Eq
-
-data Todo = Todo
-    { _text :: JSString
-    , _status :: Status
-    }
-
 data PageState = PageState
     { _todos :: [Todo]
     , _typingValue :: JSString
@@ -222,15 +214,19 @@ wholePage = div_ $ do
 
 clientMain :: API -> Client ()
 clientMain api = do
+  todos <- onServer $ apiFetchTodos api
   liftIO $ do
     Just elem <- elemById "inject"
-    render initialPageState elem wholePage
+    render (PageState todos "") elem wholePage
   withElems ["new-todo"] $ \[todo] ->
       todo `onEvent` OnKeyDown $ \k ->
         case k of
           13 -> do
             m <- getProp todo "value"
-            onServer $ apiSend api <.> (m :: String)
+            todos' <- onServer $ apiAddTodo api <.> Todo (toJSString m) Active
+            liftIO $ do
+              Just elem <- elemById "inject"
+              render (PageState todos' "") elem wholePage
           _ ->
             return ()
   return ()

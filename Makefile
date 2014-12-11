@@ -1,34 +1,25 @@
-all: make_build static build/todomvc.js todomvc
+all: static build/web/todomvc.js build/todomvc
 
-build/todomvc.js: src/Main.hs src/Client.hs src/Types.hs
+deps:
+	haste-inst install -j react-haskell lens-family
+	cabal install -j react-haskell lens-family acid-state 
+
+build/web/todomvc.js: src/*.hs
 	hastec --debug -isrc --with-js=lib/stubs.js src/Main.hs -o $@
 
-todomvc: src/Main.hs src/Client.hs src/Types.hs src/Server.hs
-	ghc --make -isrc src/Main.hs -o todomvc
+build/todomvc: src/*.hs
+	ghc --make -isrc src/Main.hs -o build/todomvc
 
-build/: 
+build/web/:
 	mkdir -p $@
 
-make_build: build/ 
-
-static: build/base.css build/bg.png build/todomvc.html build/react-with-addons.js
-
-build/react-with-addons.js: lib/react-with-addons.js
-	cp -f $< $@
-build/base.css: static/base.css 
-	cp -f $< $@
-build/bg.png: static/bg.png
-	cp -f $< $@
-build/todomvc.html: static/todomvc.html
-	cp -f $< $@
+static: build/web/
+	cp static/* build/web/
+	cp lib/react-with-addons.js build/web/
 
 clean:
 	-rm -rf build
 	-rm -rf main
-	-rm todomvc
+	-rm -rf db
 	-rm src/*.hi
 	-rm src/*.o
-
-distclean: clean
-	-rm todomvc
-	-rm todomvc.js

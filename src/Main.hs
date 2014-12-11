@@ -10,24 +10,20 @@ import Haste.App.Concurrent
 import Control.Applicative
 import qualified Control.Concurrent as C
 
-type State = String
-
--- | Tell the server we're here and remove any stale sessions.
-send :: Server State -> String -> Server ()
-send stateS msg =
- do state <- stateS
-    liftIO $ putStrLn (state ++ msg)
+#ifdef __HASTE__
+initAPI :: App API
+initAPI =
+    API <$> remote (error "cannot evaluate initAPI in Client!")
+        <*> remote (error "cannot evaluate initAPI in Client!")
+#else
+import Server(initAPI)
+#endif
 
 main :: IO ()
-main = do
-  putStrLn "starting ok"
-  runApp (mkConfig "ws://localhost:8891" 8891) $ do
-    -- Create our state-holding elements
-    state <- liftServerIO $
-        return "{Begin}"
-
-    -- Create an API object holding all available functions
-    api <- API <$> remote (send state)
-
-    -- Launch the client
-    runClient $ clientMain api
+main =
+ do let port = 8891
+    let state = "{Begin}"
+    putStrLn ("Starting Haste.App on port " ++ show port)
+    runApp (mkConfig ("ws://localhost:" ++ show port) port) $
+     do api <- initAPI
+        runClient $ clientMain api

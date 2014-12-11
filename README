@@ -1,0 +1,3 @@
+Demo of a Haste.App using the react-haskell library.
+
+An Acid State back-end is stapled on to the todomvc example originally by Joel Burget; in [react-haskell](https://github.com/joelburget/react-haskell).
