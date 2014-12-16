@@ -30,8 +30,6 @@ data PageState = PageState
 
 -- UTILITY
 
-status :: Lens' Todo Status
-status f (Todo t s) = Todo t <$> f s
 
 todos :: Lens' PageState [Todo]
 todos f (PageState t v) = (`PageState` v) <$> f t
@@ -39,21 +37,10 @@ todos f (PageState t v) = (`PageState` v) <$> f t
 typingValue :: Lens' PageState JSString
 typingValue f (PageState t v) = PageState t <$> f v
 
-toggleStatus :: Status -> Status
-toggleStatus Active = Completed
-toggleStatus Completed = Active
 
 trim :: JSString -> JSString
 trim = unsafePerformIO . ffi "(function(str) { return str.trim(); })"
 
--- this traversal is in lens but lens-family has a weird ix which isn't
--- what we want. definition just copied from lens.
-ix' :: Int -> Traversal' [a] a
-ix' k f xs0 | k < 0     = pure xs0
-            | otherwise = go xs0 k where
-    go [] _ = pure []
-    go (a:as) 0 = (:as) <$> f a
-    go (a:as) i = (a:) <$> (go as $! i - 1)
 
 -- remove an item from the list by index
 iFilter :: Int -> [a] -> [a]
@@ -68,7 +55,7 @@ handleEnter oldState@PageState{_todos, _typingValue} =
     let trimmed = trim (trace "got here" _typingValue)
     in if trimmed == ""
            then oldState
-           else PageState (_todos ++ [Todo trimmed Active]) ""
+           else PageState (_todos ++ [Todo 0 trimmed Active]) ""
 
 -- TODO exit editing
 -- "If escape is pressed during the edit, the edit state should be left and
@@ -129,16 +116,17 @@ header = header_ <! id_ "header" $ do
 todoView :: Int -> StatefulReact PageState ()
 todoView i = do
     PageState{_todos} <- getState
-    let Todo{_text, _status} = _todos !! i
+    let Todo{_id, _text, _status} = _todos !! i
     li_ <! class_ (if _status == Completed then "completed" else "") $ do
         div_ <! class_ "view" $ do
             input_ <! class_ "toggle"
+                   <! id_ (toJSString $ "toggle-" ++ show _id )
                    <! type_ "checkbox"
                    <! checked_ (_status == Completed)
                    <! onClick (handleItemCheck i)
             label_ <! onDoubleClick handleLabelDoubleClick $ text_ _text
             button_ <! class_ "destroy"
-                    <! id_ (toJSString $ "destroy" ++ show i)
+                    <! id_ (toJSString $ "destroy-" ++ show _id)
                     <! onClick (handleDestroy i) $ return ()
 
         input_ <! class_ "edit"
@@ -193,7 +181,6 @@ wholePage = div_ $ do
     PageState{_todos} <- getState
     section_ <! id_ "todoapp" $ do
         header
-
         -- "When there are no todos, #main and #footer should be hidden."
         unless (null _todos) $ do
             mainBody
@@ -207,18 +194,21 @@ clientMain api = do
         Just inject <- elemById "inject"
         render (PageState initTodos "") inject wholePage
         return inject
+    let listenMods _id =
+             do withElem ("destroy-" ++ show _id ) $ \ todo ->
+                    todo `onEvent` OnClick $ \ _ _ ->
+                        onServer $ apiDeleteTodo api <.> _id
+                withElem ("toggle-" ++ show _id) $ \ todo ->
+                    todo `onEvent` OnClick $ \ _ _ ->
+                        onServer $ apiToggleTodo api <.> _id
+    forM_ initTodos $ \Todo{_id} -> listenMods _id
     withElem "new-todo" $ \ todo ->
         todo `onEvent` OnKeyDown $ \k ->
             case k of
                 13 -> do
                     m <- getProp todo "value"
-                    todos' <- onServer $ apiAddTodo api <.> Todo (toJSString m) Active
+                    (_id, todos') <- onServer $ apiAddTodo api <.> Todo 0 (toJSString m) Active
                     liftIO $
-                      render (PageState todos' "") inject wholePage
+                        render (PageState todos' "") inject wholePage
+                    listenMods _id
                 _ -> return ()
-    forM_ [0..length initTodos - 1] $ \i ->
-        withElem ("destroy" ++ show i) $ \ todo ->
-            todo `onEvent` OnClick $ \ _ (_,_) ->
-             do todos' <- onServer $ apiDeleteTodo api <.> i
-                liftIO $
-                    render (PageState todos' "") inject wholePage

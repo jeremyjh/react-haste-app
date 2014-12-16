@@ -12,51 +12,64 @@ import Types
 import Control.Applicative ((<*>), (<$>))
 
 import Control.Monad.Reader(ask)
-import qualified Control.Monad.State as State
 
 import Data.Acid (Query, Update, makeAcidic, AcidState, openLocalStateFrom)
 import Data.Acid.Advanced (update', query')
 import Data.SafeCopy (deriveSafeCopy, base)
 
-type State = [Todo]
+import qualified Data.IntMap.Strict as Map
 
-allTodos :: Query State State
-allTodos = ask
+import Lens.Family2 (Lens', views, over)
+import Lens.Family2.State ((%=), (+=), use, uses)
 
-addTodo :: Todo -> Update State State
+data AppState = AppState {_counter :: Int, _todos :: Map.IntMap Todo}
+
+counter :: Lens' AppState Int
+counter f (AppState c t) = (`AppState` t) <$> f c
+
+todos :: Lens' AppState (Map.IntMap Todo)
+todos f (AppState c t) = AppState c <$> f t
+
+allTodos :: Query AppState [Todo]
+allTodos = views todos (map snd . Map.toList) <$> ask
+
+addTodo :: Todo -> Update AppState (Int, [Todo])
 addTodo todo =
- do todos <- State.get
-    State.put (todo : todos)
-    return (todo : todos)
+ do counter += 1
+    counter' <- use counter
+    todos %= Map.insert counter' todo {_id = counter'}
+    (,) counter' <$> uses todos (map snd . Map.toList)
 
-deleteTodo :: Int -> Update State State
-deleteTodo 0 =
- do todos <- State.get
-    let todos' = drop 1 todos
-    State.put todos'
-    return todos'
-deleteTodo i =
- do todos <- State.get
-    let todos' = take 1 todos ++ drop (i + 1) todos
-    State.put todos'
-    return todos'
+deleteTodo :: Int -> Update AppState ()
+deleteTodo i = todos %= Map.delete i
 
-$(makeAcidic ''State ['allTodos, 'addTodo, 'deleteTodo])
+toggleTodo :: Int -> Update AppState ()
+toggleTodo i =
+    todos %= Map.update toggleM i
+  where toggleM = Just . over status toggleStatus
 
-fetchTodos :: Server (AcidState State) -> Server State
+
+$(makeAcidic ''AppState ['allTodos, 'addTodo, 'deleteTodo, 'toggleTodo])
+
+fetchTodos :: Server (AcidState AppState) -> Server [Todo]
 fetchTodos state' =
  do state <- state'
     query' state AllTodos
 
-insertTodo :: Server (AcidState State) -> Todo -> Server State
+insertTodo :: Server (AcidState AppState) -> Todo -> Server (Int, [Todo])
 insertTodo state' todo =
  do state <- state'
     update' state (AddTodo todo)
 
-removeTodo :: Server (AcidState State) -> Int -> Server State
+removeTodo :: Server (AcidState AppState) -> Int -> Server ()
 removeTodo state' i =
  do state <- state'
     update' state (DeleteTodo i)
+
+doToggleTodo :: Server (AcidState AppState) -> Int -> Server ()
+doToggleTodo state' i =
+ do state <- state'
+    update' state (ToggleTodo i)
 
 -- | Initialize the Server API, capturing all the remote operations.
 --
@@ -69,10 +82,12 @@ initAPI =
     API <$> remote (fetchTodos state)
         <*> remote (insertTodo state)
         <*> remote (removeTodo state)
-  where initialTodos =
-            [Todo "derp" Active, Todo "xyz" Completed
-            ,Todo "sjdfk" Active, Todo "ksljl" Completed]
+        <*> remote (doToggleTodo state)
+  where initialTodos = AppState 4 $ Map.fromList
+            [(1, Todo 1 "one" Active), (2, Todo 2 "two" Completed)
+            ,(3, Todo 3 "three" Active), (4, Todo 4 "four" Completed)]
 
 deriveSafeCopy 1 'base ''JSString
 deriveSafeCopy 1 'base ''Status
+deriveSafeCopy 1 'base ''AppState
 deriveSafeCopy 1 'base ''Todo
