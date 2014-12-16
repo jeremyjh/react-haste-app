@@ -14,6 +14,7 @@ initAPI :: App API
 initAPI =
     API <$> remote nohaste
         <*> remote nohaste
+        <*> remote nohaste
   where nohaste = (error "cannot evaluate initAPI in Client!")
 #else
 import Server(initAPI)

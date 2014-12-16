@@ -5,7 +5,8 @@
 
 module Server (initAPI) where
 
-import Haste.App (App, Server, remote, liftServerIO, JSString)
+import Haste.App
+       (App, Server, remote, liftServerIO, JSString)
 import Types
 
 import Control.Applicative ((<*>), (<$>))
@@ -28,7 +29,19 @@ addTodo todo =
     State.put (todo : todos)
     return (todo : todos)
 
-$(makeAcidic ''State ['allTodos, 'addTodo])
+deleteTodo :: Int -> Update State State
+deleteTodo 0 =
+ do todos <- State.get
+    let todos' = drop 1 todos
+    State.put todos'
+    return todos'
+deleteTodo i =
+ do todos <- State.get
+    let todos' = take 1 todos ++ drop (i + 1) todos
+    State.put todos'
+    return todos'
+
+$(makeAcidic ''State ['allTodos, 'addTodo, 'deleteTodo])
 
 fetchTodos :: Server (AcidState State) -> Server State
 fetchTodos state' =
@@ -40,6 +53,11 @@ insertTodo state' todo =
  do state <- state'
     update' state (AddTodo todo)
 
+removeTodo :: Server (AcidState State) -> Int -> Server State
+removeTodo state' i =
+ do state <- state'
+    update' state (DeleteTodo i)
+
 -- | Initialize the Server API, capturing all the remote operations.
 --
 -- Note: This is the only function we export, making it possible to
@@ -50,6 +68,7 @@ initAPI =
  do state <- liftServerIO $ openLocalStateFrom "db" initialTodos
     API <$> remote (fetchTodos state)
         <*> remote (insertTodo state)
+        <*> remote (removeTodo state)
   where initialTodos =
             [Todo "derp" Active, Todo "xyz" Completed
             ,Todo "sjdfk" Active, Todo "ksljl" Completed]

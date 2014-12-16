@@ -30,6 +30,7 @@ instance Binary JSString where
 instance Binary Todo
 
 data API = API {
-    apiFetchTodos  :: Remote (Server [Todo]),
-    apiAddTodo  :: Remote (Todo -> Server [Todo])
+    apiFetchTodos  :: Remote (Server [Todo])
+  , apiAddTodo  :: Remote (Todo -> Server [Todo])
+  , apiDeleteTodo  :: Remote (Int -> Server [Todo])
   }

@@ -138,6 +138,7 @@ todoView i = do
                    <! onClick (handleItemCheck i)
             label_ <! onDoubleClick handleLabelDoubleClick $ text_ _text
             button_ <! class_ "destroy"
+                    <! id_ (toJSString $ "destroy" ++ show i)
                     <! onClick (handleDestroy i) $ return ()
 
         input_ <! class_ "edit"
@@ -206,12 +207,18 @@ clientMain api = do
         Just inject <- elemById "inject"
         render (PageState initTodos "") inject wholePage
         return inject
-    withElems ["new-todo"] $ \[todo] ->
+    withElem "new-todo" $ \ todo ->
         todo `onEvent` OnKeyDown $ \k ->
-          case k of
-              13 -> do
-                  m <- getProp todo "value"
-                  todos' <- onServer $ apiAddTodo api <.> Todo (toJSString m) Active
-                  liftIO $
+            case k of
+                13 -> do
+                    m <- getProp todo "value"
+                    todos' <- onServer $ apiAddTodo api <.> Todo (toJSString m) Active
+                    liftIO $
+                      render (PageState todos' "") inject wholePage
+                _ -> return ()
+    forM_ [0..length initTodos - 1] $ \i ->
+        withElem ("destroy" ++ show i) $ \ todo ->
+            todo `onEvent` OnClick $ \ _ (_,_) ->
+             do todos' <- onServer $ apiDeleteTodo api <.> i
+                liftIO $
                     render (PageState todos' "") inject wholePage
-              _ -> return ()
