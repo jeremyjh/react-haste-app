@@ -37,6 +37,7 @@ data API = API {
   , apiAddTodo  :: Remote (Todo -> Server (Int, [Todo]))
   , apiDeleteTodo  :: Remote (Int -> Server ())
   , apiToggleTodo  :: Remote (Int -> Server ())
+  , apiClearComplete  :: Remote (Server [Todo])
   }
 
 -- Commons

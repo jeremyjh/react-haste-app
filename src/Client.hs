@@ -161,10 +161,10 @@ innerFooter = footer_ <! id_ "footer" $ do
 
         if activeCount == 1 then " item left" else " items left"
 
-    unless (inactiveCount == 0) $
-        button_ <! id_ "clear-completed"
-                <! onClick clearCompleted $
-            text_ (toJSStr ("Clear completed (" ++ show inactiveCount ++ ")"))
+    button_ <! id_ "clear-completed"
+            <! class_ (if inactiveCount == 0 then "hidden" else "")
+            <! onClick clearCompleted $
+        text_ (toJSStr ("Clear completed (" ++ show inactiveCount ++ ")"))
 
 outerFooter :: StatefulReact PageState ()
 outerFooter = footer_ <! id_ "info" $ do
@@ -190,25 +190,26 @@ wholePage = div_ $ do
 clientMain :: API -> Client ()
 clientMain api = do
     initTodos <- onServer $ apiFetchTodos api
-    inject <- liftIO $ do
-        Just inject <- elemById "inject"
-        render (PageState initTodos "") inject wholePage
-        return inject
-    let listenMods _id =
-             do withElem ("destroy-" ++ show _id ) $ \ todo ->
-                    todo `onEvent` OnClick $ \ _ _ ->
-                        onServer $ apiDeleteTodo api <.> _id
-                withElem ("toggle-" ++ show _id) $ \ todo ->
-                    todo `onEvent` OnClick $ \ _ _ ->
-                        onServer $ apiToggleTodo api <.> _id
+    Just inject <- elemById "inject"
+    liftIO $ render (PageState initTodos "") inject wholePage
     forM_ initTodos $ \Todo{_id} -> listenMods _id
-    withElem "new-todo" $ \ todo ->
-        todo `onEvent` OnKeyDown $ \k ->
+    withElems ["new-todo", "clear-completed"] $ \ [todo, clear] ->
+     do todo `onEvent` OnKeyDown $ \k ->
             case k of
                 13 -> do
                     m <- getProp todo "value"
                     (_id, todos') <- onServer $ apiAddTodo api <.> Todo 0 (toJSString m) Active
-                    liftIO $
-                        render (PageState todos' "") inject wholePage
+                    liftIO $ render (PageState todos' "") inject wholePage
                     listenMods _id
                 _ -> return ()
+        clear `onEvent` OnClick $ \ _ _ ->
+         do todos' <- onServer $ apiClearComplete api
+            liftIO $ render (PageState todos' "") inject wholePage
+  where
+    listenMods _id =
+     do withElem ("destroy-" ++ show _id ) $ \ todo ->
+            todo `onEvent` OnClick $ \ _ _ ->
+                onServer $ apiDeleteTodo api <.> _id
+        withElem ("toggle-" ++ show _id) $ \ todo ->
+            todo `onEvent` OnClick $ \ _ _ ->
+                onServer $ apiToggleTodo api <.> _id

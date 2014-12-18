@@ -19,7 +19,7 @@ import Data.SafeCopy (deriveSafeCopy, base)
 
 import qualified Data.IntMap.Strict as Map
 
-import Lens.Family2 (Lens', views, over)
+import Lens.Family2 (Lens', views, over, (^.))
 import Lens.Family2.State ((%=), (+=), use, uses)
 
 data AppState = AppState {_counter :: Int, _todos :: Map.IntMap Todo}
@@ -48,8 +48,12 @@ toggleTodo i =
     todos %= Map.update toggleM i
   where toggleM = Just . over status toggleStatus
 
+clearComplete :: Update AppState [Todo]
+clearComplete =
+ do todos %= Map.filter (\t -> t ^. status /= Completed )
+    map snd . Map.toList <$> use todos
 
-$(makeAcidic ''AppState ['allTodos, 'addTodo, 'deleteTodo, 'toggleTodo])
+$(makeAcidic ''AppState ['allTodos, 'addTodo, 'deleteTodo, 'toggleTodo, 'clearComplete])
 
 fetchTodos :: Server (AcidState AppState) -> Server [Todo]
 fetchTodos state' =
@@ -71,6 +75,11 @@ doToggleTodo state' i =
  do state <- state'
     update' state (ToggleTodo i)
 
+doClearComplete :: Server (AcidState AppState) -> Server [Todo]
+doClearComplete state' =
+ do state <- state'
+    update' state ClearComplete
+
 -- | Initialize the Server API, capturing all the remote operations.
 --
 -- Note: This is the only function we export, making it possible to
@@ -83,6 +92,7 @@ initAPI =
         <*> remote (insertTodo state)
         <*> remote (removeTodo state)
         <*> remote (doToggleTodo state)
+        <*> remote (doClearComplete state)
   where initialTodos = AppState 4 $ Map.fromList
             [(1, Todo 1 "one" Active), (2, Todo 2 "two" Completed)
             ,(3, Todo 3 "three" Active), (4, Todo 4 "four" Completed)]
